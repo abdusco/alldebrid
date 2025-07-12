@@ -1,13 +1,15 @@
-package alldebrid
+package main
 
 import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"alldebrid/alldebrid"
 )
 
 // PrintLinks prints download URLs to stdout
-func PrintLinks(links []*Link) {
+func PrintLinks(links []*alldebrid.Link) {
 	for _, link := range links {
 		if link.DownloadURL != "" {
 			fmt.Println(link.DownloadURL)
@@ -16,7 +18,7 @@ func PrintLinks(links []*Link) {
 }
 
 // PrintLinksAsHTML prints download links as an HTML table
-func PrintLinksAsHTML(links []*Link) {
+func PrintLinksAsHTML(links []*alldebrid.Link) {
 	css := `
         body {
             margin: 0;

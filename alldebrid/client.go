@@ -1,6 +1,7 @@
 package alldebrid
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"github.com/imroc/req/v3"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -34,7 +34,6 @@ type APIResponse struct {
 // Client represents the Alldebrid API client
 type Client struct {
 	client *req.Client
-	logger zerolog.Logger
 }
 
 // NewClient creates a new Alldebrid client with the provided API token
@@ -48,7 +47,6 @@ func NewClient(apiToken string) *Client {
 
 	return &Client{
 		client: client,
-		logger: log.With().Str("component", "alldebrid").Logger(),
 	}
 }
 
@@ -66,8 +64,9 @@ func (c *Client) checkError(resp *req.Response) error {
 }
 
 // UnrestrictURL unrestricts a premium link and returns download information
-func (c *Client) UnrestrictURL(url string) (*Link, error) {
+func (c *Client) UnrestrictURL(ctx context.Context, url string) (*Link, error) {
 	resp, err := c.client.R().
+		SetContext(ctx).
 		SetQueryParam("link", url).
 		Get("https://api.alldebrid.com/v4/link/unlock")
 
@@ -98,19 +97,26 @@ func (c *Client) UnrestrictURL(url string) (*Link, error) {
 }
 
 // UploadTorrent uploads a torrent file and returns the magnet ID
-func (c *Client) UploadTorrent(torrentPath string) (int, error) {
+func (c *Client) UploadTorrent(ctx context.Context, torrentPath string) (int, error) {
 	file, err := os.Open(torrentPath)
 	if err != nil {
 		return 0, fmt.Errorf("failed to open torrent file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Ctx(ctx).Warn().Err(closeErr).Msg("failed to close torrent file")
+		}
+	}()
 
 	resp, err := c.client.R().
+		SetContext(ctx).
 		SetFileUpload(req.FileUpload{
 			ParamName: "files[]",
 			FileName:  filepath.Base(torrentPath),
 			GetFileContent: func() (io.ReadCloser, error) {
-				file.Seek(0, 0)
+				if _, err := file.Seek(0, 0); err != nil {
+					return nil, fmt.Errorf("failed to seek file: %w", err)
+				}
 				return file, nil
 			},
 		}).
@@ -142,8 +148,9 @@ func (c *Client) UploadTorrent(torrentPath string) (int, error) {
 }
 
 // UploadMagnet uploads a magnet URI and returns the magnet ID
-func (c *Client) UploadMagnet(magnetURI string) (int, error) {
+func (c *Client) UploadMagnet(ctx context.Context, magnetURI string) (int, error) {
 	resp, err := c.client.R().
+		SetContext(ctx).
 		SetFormData(map[string]string{
 			"magnets[]": magnetURI,
 		}).
@@ -175,8 +182,9 @@ func (c *Client) UploadMagnet(magnetURI string) (int, error) {
 }
 
 // GetTorrentLinks retrieves download links for a torrent/magnet ID
-func (c *Client) GetTorrentLinks(torrentID int) ([]*Link, error) {
+func (c *Client) GetTorrentLinks(ctx context.Context, torrentID int) ([]*Link, error) {
 	resp, err := c.client.R().
+		SetContext(ctx).
 		SetFormData(map[string]string{
 			"id[]": fmt.Sprintf("%d", torrentID),
 		}).
@@ -225,10 +233,10 @@ func (c *Client) GetTorrentLinks(torrentID int) ([]*Link, error) {
 	return largeFiles, nil
 }
 
-func (c *Client) unrestrictLink(link *Link) *Link {
-	unrestrictedLink, err := c.UnrestrictURL(link.URL)
+func (c *Client) unrestrictLink(ctx context.Context, link *Link) *Link {
+	unrestrictedLink, err := c.UnrestrictURL(ctx, link.URL)
 	if err != nil {
-		c.logger.Error().Err(err).Str("url", link.URL).Msg("failed to unrestrict link")
+		log.Ctx(ctx).Error().Err(err).Str("url", link.URL).Msg("failed to unrestrict link")
 		return link
 	}
 	link.DownloadURL = unrestrictedLink.DownloadURL
@@ -236,17 +244,21 @@ func (c *Client) unrestrictLink(link *Link) *Link {
 }
 
 // WaitForDownloadLinks waits for torrent processing to complete and returns download links
-func (c *Client) WaitForDownloadLinks(magnetID int, timeout time.Duration) ([]*Link, error) {
-	start := time.Now()
+func (c *Client) WaitForDownloadLinks(ctx context.Context, magnetID int, timeout time.Duration) ([]*Link, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		case <-ticker.C:
-			links, err := c.GetTorrentLinks(magnetID)
+			links, err := c.GetTorrentLinks(ctx, magnetID)
 			if err != nil {
-				c.logger.Warn().Err(err).Msg("failed to get torrent links")
+				log.Ctx(ctx).Warn().Err(err).Msg("failed to get torrent links")
 				continue
 			}
 			if len(links) > 0 {
@@ -256,18 +268,12 @@ func (c *Client) WaitForDownloadLinks(magnetID int, timeout time.Duration) ([]*L
 					wg.Add(1)
 					go func(l *Link) {
 						defer wg.Done()
-						c.unrestrictLink(l)
+						c.unrestrictLink(ctx, l)
 					}(link)
 				}
 				wg.Wait()
 				return links, nil
 			}
-		case <-time.After(timeout):
-			return nil, fmt.Errorf("timeout waiting for download links")
-		}
-
-		if time.Since(start) >= timeout {
-			return nil, fmt.Errorf("timeout waiting for download links")
 		}
 	}
 }

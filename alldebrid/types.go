@@ -43,41 +43,65 @@ type MagnetFilesResponse struct {
 
 // MagnetFiles represents the files in a magnet
 type MagnetFiles struct {
-	Files interface{} `json:"files"`
+	Files any `json:"files"`
 }
 
 // FileEntry represents a file entry in the torrent tree
 type FileEntry struct {
-	Link string `json:"link"` // link
-	Name string `json:"name"` // name
-	Size int64  `json:"size"` // size
-}
-
-// DirEntry represents a directory entry in the torrent tree
-type DirEntry struct {
-	E interface{} `json:"e"` // entries
+	Link string `json:"link"`
+	Path string `json:"path"`
+	Name string `json:"name"`
+	Size int64  `json:"size"`
 }
 
 // flattenTree recursively flattens the torrent file tree structure
-func flattenTree(data interface{}) []FileEntry {
+func flattenTree(data any) []FileEntry {
+	return flattenTreeWithPath(data, "")
+}
+
+// flattenTreeWithPath recursively flattens the torrent file tree structure with path tracking
+func flattenTreeWithPath(data any, currentPath string) []FileEntry {
 	var files []FileEntry
 
 	switch v := data.(type) {
-	case []interface{}:
+	case []any:
 		for _, item := range v {
-			files = append(files, flattenTree(item)...)
+			files = append(files, flattenTreeWithPath(item, currentPath)...)
 		}
-	case map[string]interface{}:
+	case map[string]any:
 		if e, exists := v["e"]; exists {
 			// It's a directory
-			files = append(files, flattenTree(e)...)
+			var dirName string
+			if n, hasN := v["n"]; hasN {
+				dirName = n.(string)
+			}
+
+			var newPath string
+			if currentPath == "" {
+				newPath = dirName
+			} else if dirName != "" {
+				newPath = currentPath + "/" + dirName
+			} else {
+				newPath = currentPath
+			}
+
+			files = append(files, flattenTreeWithPath(e, newPath)...)
 		} else if l, hasL := v["l"]; hasL {
 			// It's a file
 			if n, hasN := v["n"]; hasN {
 				if s, hasS := v["s"]; hasS {
+					fileName := n.(string)
+					var filePath string
+					if currentPath == "" {
+						filePath = fileName
+					} else {
+						filePath = currentPath + "/" + fileName
+					}
+
 					files = append(files, FileEntry{
 						Link: l.(string),
-						Name: n.(string),
+						Path: filePath,
+						Name: fileName,
 						Size: int64(s.(float64)),
 					})
 				}

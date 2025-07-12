@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -23,7 +27,6 @@ type cliArgs struct {
 }
 
 func (a cliArgs) Validate() error {
-	// only one of Link, Magnet, or TorrentFilePath should be set
 	if a.Link == nil && a.Magnet == nil && a.TorrentFilePath == nil {
 		return errors.New("either link, magnet, or torrent file path must be provided")
 	}
@@ -54,53 +57,75 @@ func parseArgs() cliArgs {
 	return args
 }
 
+func run(ctx context.Context, args cliArgs) error {
+	client := alldebrid.NewClient(args.Token)
+
+	var links []*alldebrid.Link
+	switch {
+	case args.Magnet != nil:
+		magnetID, err := client.UploadMagnet(ctx, *args.Magnet)
+		if err != nil {
+			return fmt.Errorf("failed to upload magnet: %w", err)
+		}
+		links, err = client.WaitForDownloadLinks(ctx, magnetID, 10*time.Minute)
+		if err != nil {
+			return fmt.Errorf("failed to get download links: %w", err)
+		}
+
+	case args.Link != nil:
+		link, err := client.UnrestrictURL(ctx, *args.Link)
+		if err != nil {
+			return fmt.Errorf("failed to unrestrict URL: %w", err)
+		}
+		links = []*alldebrid.Link{link}
+
+	case args.TorrentFilePath != nil:
+		torrentID, err := client.UploadTorrent(ctx, *args.TorrentFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to upload torrent: %w", err)
+		}
+		links, err = client.WaitForDownloadLinks(ctx, torrentID, 10*time.Minute)
+		if err != nil {
+			return fmt.Errorf("failed to get download links: %w", err)
+		}
+	}
+
+	printLinksFn := PrintLinks
+	if args.PrintAsHTML {
+		printLinksFn = PrintLinksAsHTML
+	}
+
+	printLinksFn(links)
+
+	return nil
+}
+
 func main() {
-	// Configure zerolog
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	zerolog.DefaultContextLogger = &log.Logger
 
-	// Parse command line arguments
 	args := parseArgs()
 
-	// Validate arguments
 	if err := args.Validate(); err != nil {
 		log.Fatal().Err(err).Msg("invalid arguments")
 	}
 
-	client := alldebrid.NewClient(args.Token)
-	printer := alldebrid.PrintLinks
-	if args.PrintAsHTML {
-		printer = alldebrid.PrintLinksAsHTML
-	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	switch {
-	case args.Magnet != nil:
-		magnetID, err := client.UploadMagnet(*args.Magnet)
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to upload magnet")
-		}
-		links, err := client.WaitForDownloadLinks(magnetID, 10*time.Minute)
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to get download links")
-		}
-		printer(links)
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Minute)
+	defer cancel()
 
-	case args.Link != nil:
-		link, err := client.UnrestrictURL(*args.Link)
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to unrestrict URL")
+	if err := run(ctx, args); err != nil {
+		if ctx.Err() != nil {
+			switch ctx.Err() {
+			case context.Canceled:
+				log.Info().Msg("operation cancelled by user")
+			case context.DeadlineExceeded:
+				log.Error().Msg("operation timed out")
+			}
+			os.Exit(1)
 		}
-		printer([]*alldebrid.Link{link})
-
-	case args.TorrentFilePath != nil:
-		torrentID, err := client.UploadTorrent(*args.TorrentFilePath)
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to upload torrent")
-		}
-		links, err := client.WaitForDownloadLinks(torrentID, 10*time.Minute)
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to get download links")
-		}
-		printer(links)
+		log.Fatal().Err(err).Msg("operation failed")
 	}
 }
