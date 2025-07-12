@@ -60,7 +60,6 @@ func PrintLinksAsHTML(links []*alldebrid.Link) {
 
 	tableHTML := fmt.Sprintf(`
         <style>%s</style>
-        <script>window.app.setFloating(false)</script>
         <table>
             <thead><tr>
                 <th>Filename</th>

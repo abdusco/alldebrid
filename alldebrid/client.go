@@ -251,7 +251,7 @@ func (c *Client) WaitForDownloadLinks(ctx context.Context, magnetID int, timeout
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	attempts := 0
@@ -260,7 +260,6 @@ func (c *Client) WaitForDownloadLinks(ctx context.Context, magnetID int, timeout
 		case <-ctx.Done():
 			log.Ctx(ctx).Warn().
 				Int("magnet_id", magnetID).
-				Int("attempts", attempts).
 				Dur("timeout", timeout).
 				Msg("Timeout reached while waiting for download links")
 			return nil, ctx.Err()
@@ -276,7 +275,6 @@ func (c *Client) WaitForDownloadLinks(ctx context.Context, magnetID int, timeout
 				log.Ctx(ctx).Warn().
 					Err(err).
 					Int("magnet_id", magnetID).
-					Int("attempt", attempts).
 					Msg("Failed to get torrent links, retrying")
 				continue
 			}
@@ -284,10 +282,8 @@ func (c *Client) WaitForDownloadLinks(ctx context.Context, magnetID int, timeout
 				log.Ctx(ctx).Debug().
 					Int("magnet_id", magnetID).
 					Int("link_count", len(links)).
-					Int("attempts", attempts).
 					Msg("Found download links, starting unrestriction")
 
-				// Unrestrict links concurrently
 				var wg sync.WaitGroup
 				for _, link := range links {
 					wg.Add(1)
