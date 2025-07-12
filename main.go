@@ -77,17 +77,6 @@ func parseArgs() cliArgs {
 	return args
 }
 
-// filterLargeFiles filters links to only include files larger than the specified size in MB
-func filterLargeFiles(links []*alldebrid.Link, minSizeMB float64) []*alldebrid.Link {
-	var largeFiles []*alldebrid.Link
-	for _, link := range links {
-		if link.SizeMB() > minSizeMB {
-			largeFiles = append(largeFiles, link)
-		}
-	}
-	return largeFiles
-}
-
 func run(ctx context.Context, args cliArgs) error {
 	client := alldebrid.NewClient(args.Token)
 
