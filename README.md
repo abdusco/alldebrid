@@ -55,6 +55,7 @@ You need an Alldebrid API token to use this tool. You can provide it in two ways
 | `-html`                         | bool     | `false`             | Print links as HTML                      |
 | `-json`                         | bool     | `false`             | Print links as JSON                      |
 | `-debug`                        | bool     | `false`             | Enable debug mode                        |
+| `-version`                      | bool     | `false`             | Print version information and exit       |
 
 ### Timeout Flag
 

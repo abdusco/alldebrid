@@ -27,11 +27,17 @@ type cliArgs struct {
 	PrintAsHTML              bool
 	PrintAsJSON              bool
 	Debug                    bool
+	Version                  bool
 	Timeout                  time.Duration
 	IgnoreFilesSmallerThanMB float64
 }
 
 func (a cliArgs) Validate() error {
+	// Skip validation if version flag is set
+	if a.Version {
+		return nil
+	}
+
 	if a.Link == nil && a.Magnet == nil && a.TorrentFilePath == nil {
 		return errors.New("either link, magnet, or torrent file path must be provided")
 	}
@@ -53,6 +59,7 @@ func parseArgs() cliArgs {
 	flag.BoolVar(&args.PrintAsHTML, "html", false, "Print links as HTML")
 	flag.BoolVar(&args.PrintAsJSON, "json", false, "Print links as JSON")
 	flag.BoolVar(&args.Debug, "debug", false, "Enable debug mode")
+	flag.BoolVar(&args.Version, "version", false, "Print version information")
 	flag.DurationVar(&args.Timeout, "timeout", 10*time.Minute, "Timeout for waiting for download links (default: 10m)")
 	flag.Float64Var(&args.IgnoreFilesSmallerThanMB, "ignore-files-smaller-than-mb", 5.0, "Ignore files smaller than this size in MB (default: 5.0)")
 	flag.Parse()
@@ -134,6 +141,12 @@ func run(ctx context.Context, args cliArgs) error {
 
 func main() {
 	args := parseArgs()
+
+	// Print version information and exit if version flag is set
+	if args.Version {
+		fmt.Println(version)
+		return
+	}
 
 	level := zerolog.InfoLevel
 	if args.Debug {

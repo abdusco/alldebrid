@@ -27,9 +27,21 @@ jobs:
           go-version: '1.24'
           check-latest: true
 
-      - name: Build binary
+      - name: Get version info
+        id: version
         run: |
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -ldflags "-s -w" -o alldebrid-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }} .
+          GIT_TAG=$(git describe --tags --exact-match 2>/dev/null || echo "dev")
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          echo "git_tag=${GIT_TAG}" >> $GITHUB_OUTPUT
+          echo "git_commit=${GIT_COMMIT}" >> $GITHUB_OUTPUT
+
+      - name: Build binary
+        run: >-
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }}
+          go build -v -ldflags "-s -w
+            -X main.gitTag=${{ steps.version.outputs.git_tag }}
+            -X main.gitCommit=${{ steps.version.outputs.git_commit }}"
+          -o alldebrid-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }} .
 
       - name: Create/Update Draft Release
         uses: softprops/action-gh-release@v2
