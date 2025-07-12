@@ -213,7 +213,7 @@ func (c *Client) GetTorrentLinks(ctx context.Context, torrentID int) ([]*Link, e
 	}
 
 	files := flattenTree(magnetResp.Magnets[0].Files)
-	var largeFiles []*Link
+	var allFiles []*Link
 
 	for _, file := range files {
 		link := &Link{
@@ -221,16 +221,10 @@ func (c *Client) GetTorrentLinks(ctx context.Context, torrentID int) ([]*Link, e
 			Filename: file.Name,
 			Size:     file.Size,
 		}
-		if link.SizeMB() > 5 {
-			largeFiles = append(largeFiles, link)
-		}
+		allFiles = append(allFiles, link)
 	}
 
-	if len(largeFiles) == 0 {
-		return nil, fmt.Errorf("torrent only contains small files")
-	}
-
-	return largeFiles, nil
+	return allFiles, nil
 }
 
 func (c *Client) unrestrictLink(ctx context.Context, link *Link) *Link {

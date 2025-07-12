@@ -11,10 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	"alldebrid/alldebrid"
+
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-
-	"alldebrid/alldebrid"
+	"github.com/samber/lo"
 )
 
 type cliArgs struct {
@@ -22,8 +23,9 @@ type cliArgs struct {
 	Magnet          *string
 	TorrentFilePath *string
 
-	Token       string
-	PrintAsHTML bool
+	Token                    string
+	PrintAsHTML              bool
+	IgnoreFilesSmallerThanMB float64
 }
 
 func (a cliArgs) Validate() error {
@@ -42,6 +44,7 @@ func parseArgs() cliArgs {
 	var args cliArgs
 	flag.StringVar(&args.Token, "token", os.Getenv("ALLDEBRID_TOKEN"), "Alldebrid API Token")
 	flag.BoolVar(&args.PrintAsHTML, "html", false, "Print links as HTML")
+	flag.Float64Var(&args.IgnoreFilesSmallerThanMB, "ignore-files-smaller-than-mb", 5.0, "Ignore files smaller than this size in MB (default: 5.0)")
 	flag.Parse()
 
 	input := flag.Arg(0)
@@ -55,6 +58,17 @@ func parseArgs() cliArgs {
 	}
 
 	return args
+}
+
+// filterLargeFiles filters links to only include files larger than the specified size in MB
+func filterLargeFiles(links []*alldebrid.Link, minSizeMB float64) []*alldebrid.Link {
+	var largeFiles []*alldebrid.Link
+	for _, link := range links {
+		if link.SizeMB() > minSizeMB {
+			largeFiles = append(largeFiles, link)
+		}
+	}
+	return largeFiles
 }
 
 func run(ctx context.Context, args cliArgs) error {
@@ -88,6 +102,12 @@ func run(ctx context.Context, args cliArgs) error {
 		if err != nil {
 			return fmt.Errorf("failed to get download links: %w", err)
 		}
+	}
+
+	if args.IgnoreFilesSmallerThanMB > 0 {
+		links = lo.Filter(links, func(link *alldebrid.Link, _ int) bool {
+			return link.SizeMB() >= args.IgnoreFilesSmallerThanMB
+		})
 	}
 
 	printLinksFn := PrintLinks
