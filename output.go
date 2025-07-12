@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -71,4 +72,36 @@ func PrintLinksAsHTML(links []*alldebrid.Link) {
     `, css, strings.Join(rowHTMLs, ""))
 
 	fmt.Print(tableHTML)
+}
+
+// PrintLinksAsJSON prints download links as JSON
+func PrintLinksAsJSON(links []*alldebrid.Link) {
+	type LinkOutput struct {
+		Filename    string  `json:"filename"`
+		DownloadURL string  `json:"download_url"`
+		SizeBytes   int64   `json:"size_bytes"`
+		SizeMB      float64 `json:"size_mb"`
+	}
+
+	output := make([]LinkOutput, 0, len(links))
+
+	for _, link := range links {
+		if link.DownloadURL != "" {
+			linkData := LinkOutput{
+				Filename:    link.Filename,
+				DownloadURL: link.DownloadURL,
+				SizeBytes:   link.Size,
+				SizeMB:      link.SizeMB(),
+			}
+			output = append(output, linkData)
+		}
+	}
+
+	jsonData, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		fmt.Printf("Error marshaling JSON: %v\n", err)
+		return
+	}
+
+	fmt.Println(string(jsonData))
 }

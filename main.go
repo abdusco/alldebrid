@@ -25,6 +25,7 @@ type cliArgs struct {
 
 	Token                    string
 	PrintAsHTML              bool
+	PrintAsJSON              bool
 	IgnoreFilesSmallerThanMB float64
 }
 
@@ -44,6 +45,7 @@ func parseArgs() cliArgs {
 	var args cliArgs
 	flag.StringVar(&args.Token, "token", os.Getenv("ALLDEBRID_TOKEN"), "Alldebrid API Token")
 	flag.BoolVar(&args.PrintAsHTML, "html", false, "Print links as HTML")
+	flag.BoolVar(&args.PrintAsJSON, "json", false, "Print links as JSON")
 	flag.Float64Var(&args.IgnoreFilesSmallerThanMB, "ignore-files-smaller-than-mb", 5.0, "Ignore files smaller than this size in MB (default: 5.0)")
 	flag.Parse()
 
@@ -113,6 +115,8 @@ func run(ctx context.Context, args cliArgs) error {
 	printLinksFn := PrintLinks
 	if args.PrintAsHTML {
 		printLinksFn = PrintLinksAsHTML
+	} else if args.PrintAsJSON {
+		printLinksFn = PrintLinksAsJSON
 	}
 
 	printLinksFn(links)

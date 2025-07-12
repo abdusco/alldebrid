@@ -13,8 +13,8 @@ func (l *Link) SizeMB() float64 {
 	return float64(l.Size) / 1048576
 }
 
-// UnlockResponse represents the response from the link unlock API
-type UnlockResponse struct {
+// UnrestrictResponse represents the response from the link unlock API
+type UnrestrictResponse struct {
 	Filename string `json:"filename"`
 	Filesize int64  `json:"filesize"`
 	Link     string `json:"link"`
