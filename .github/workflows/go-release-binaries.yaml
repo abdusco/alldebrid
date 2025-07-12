@@ -38,9 +38,8 @@ jobs:
       - name: Build binary
         run: >-
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }}
-          go build -v -ldflags "-s -w
-            -X main.gitTag=${{ steps.version.outputs.git_tag }}
-            -X main.gitCommit=${{ steps.version.outputs.git_commit }}"
+          go build -v 
+          -ldflags "-s -w -X main.gitTag=${{ steps.version.outputs.git_tag }} -X main.gitCommit=${{ steps.version.outputs.git_commit }}"
           -o alldebrid-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }} .
 
       - name: Create/Update Draft Release
