@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -110,10 +111,21 @@ func run(ctx context.Context, args cliArgs) error {
 		}
 	}
 
-	if args.IgnoreFilesSmallerThanMB > 0 {
+	if len(links) > 0 && args.IgnoreFilesSmallerThanMB > 0 {
+		largestSize := slices.Max(lo.Map(links, func(link *alldebrid.Link, _ int) float64 {
+			return link.SizeMB()
+		}))
 		links = lo.Filter(links, func(link *alldebrid.Link, _ int) bool {
 			return link.SizeMB() >= args.IgnoreFilesSmallerThanMB
 		})
+		if len(links) == 0 {
+			log.Warn().Msgf("all links are filtered out, the largest file is %0.1fMB", largestSize)
+		}
+	}
+
+	if len(links) == 0 {
+		log.Warn().Msg("no download links found")
+		return nil
 	}
 
 	printLinksFn := PrintLinks
