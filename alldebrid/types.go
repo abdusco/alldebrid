@@ -43,7 +43,25 @@ type MagnetFilesResponse struct {
 
 // MagnetFiles represents the files in a magnet
 type MagnetFiles struct {
-	Files any `json:"files"`
+	Files []TorrentNode `json:"files"`
+}
+
+// TorrentNode represents a node in the torrent file tree (can be a file or directory)
+type TorrentNode struct {
+	Name    string        `json:"n,omitempty"` // name
+	Link    string        `json:"l,omitempty"` // link (only for files)
+	Size    float64       `json:"s,omitempty"` // size (only for files)
+	Entries []TorrentNode `json:"e,omitempty"` // entries (only for directories)
+}
+
+// IsFile returns true if this node represents a file
+func (tn *TorrentNode) IsFile() bool {
+	return tn.Link != ""
+}
+
+// IsDirectory returns true if this node represents a directory
+func (tn *TorrentNode) IsDirectory() bool {
+	return len(tn.Entries) > 0
 }
 
 // FileEntry represents a file entry in the torrent tree
@@ -55,57 +73,47 @@ type FileEntry struct {
 }
 
 // flattenTree recursively flattens the torrent file tree structure
-func flattenTree(data any) []FileEntry {
-	return flattenTreeWithPath(data, "")
+func flattenTree(nodes []TorrentNode) []FileEntry {
+	var allFiles []FileEntry
+	for _, node := range nodes {
+		allFiles = append(allFiles, flattenTreeWithPath(node, "")...)
+	}
+	return allFiles
 }
 
 // flattenTreeWithPath recursively flattens the torrent file tree structure with path tracking
-func flattenTreeWithPath(data any, currentPath string) []FileEntry {
+func flattenTreeWithPath(node TorrentNode, currentPath string) []FileEntry {
 	var files []FileEntry
 
-	switch v := data.(type) {
-	case []any:
-		for _, item := range v {
-			files = append(files, flattenTreeWithPath(item, currentPath)...)
+	if node.IsFile() {
+		// It's a file
+		var filePath string
+		if currentPath == "" {
+			filePath = node.Name
+		} else {
+			filePath = currentPath + "/" + node.Name
 		}
-	case map[string]any:
-		if e, exists := v["e"]; exists {
-			// It's a directory
-			var dirName string
-			if n, hasN := v["n"]; hasN {
-				dirName = n.(string)
-			}
 
-			var newPath string
-			if currentPath == "" {
-				newPath = dirName
-			} else if dirName != "" {
-				newPath = currentPath + "/" + dirName
-			} else {
-				newPath = currentPath
-			}
+		files = append(files, FileEntry{
+			Link: node.Link,
+			Path: filePath,
+			Name: node.Name,
+			Size: int64(node.Size),
+		})
+	} else if node.IsDirectory() {
+		// It's a directory
+		var newPath string
+		if currentPath == "" {
+			newPath = node.Name
+		} else if node.Name != "" {
+			newPath = currentPath + "/" + node.Name
+		} else {
+			newPath = currentPath
+		}
 
-			files = append(files, flattenTreeWithPath(e, newPath)...)
-		} else if l, hasL := v["l"]; hasL {
-			// It's a file
-			if n, hasN := v["n"]; hasN {
-				if s, hasS := v["s"]; hasS {
-					fileName := n.(string)
-					var filePath string
-					if currentPath == "" {
-						filePath = fileName
-					} else {
-						filePath = currentPath + "/" + fileName
-					}
-
-					files = append(files, FileEntry{
-						Link: l.(string),
-						Path: filePath,
-						Name: fileName,
-						Size: int64(s.(float64)),
-					})
-				}
-			}
+		// Process all entries in the directory
+		for _, entry := range node.Entries {
+			files = append(files, flattenTreeWithPath(entry, newPath)...)
 		}
 	}
 
