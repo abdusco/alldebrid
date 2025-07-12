@@ -1,4 +1,4 @@
-module alldebrid
+module github.com/abdusco/alldebrid
 
 go 1.24
 

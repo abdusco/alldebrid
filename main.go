@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"alldebrid/alldebrid"
+	"github.com/abdusco/alldebrid/pkg/alldebrid"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"strings"
 
-	"alldebrid/alldebrid"
+	"github.com/abdusco/alldebrid/pkg/alldebrid"
 )
 
 // PrintLinks prints download URLs to stdout
