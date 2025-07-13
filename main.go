@@ -94,9 +94,18 @@ func run(ctx context.Context, args cliArgs) error {
 		}
 
 	case args.Link != nil:
-		link, err := client.UnrestrictURL(ctx, *args.Link)
-		if err != nil {
-			return fmt.Errorf("failed to unrestrict URL: %w", err)
+		var link *alldebrid.Link
+		var err error
+		if alldebrid.IsUnrestrictedLink(*args.Link) {
+			link, err = client.GetLink(ctx, *args.Link)
+			if err != nil {
+				return fmt.Errorf("failed to get link: %w", err)
+			}
+		} else {
+			link, err = client.UnrestrictURL(ctx, *args.Link)
+			if err != nil {
+				return fmt.Errorf("failed to unrestrict URL: %w", err)
+			}
 		}
 		links = []*alldebrid.Link{link}
 

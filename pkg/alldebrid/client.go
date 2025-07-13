@@ -4,13 +4,16 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/imroc/req/v3"
 	"github.com/rs/zerolog/log"
+	"github.com/samber/lo"
 )
 
 // Error represents an Alldebrid API error
@@ -303,4 +306,30 @@ func (c *Client) WaitForDownloadLinks(ctx context.Context, magnetID int, timeout
 				Msg("No links ready yet, waiting for next check")
 		}
 	}
+}
+
+func (c *Client) GetLink(ctx context.Context, url string) (*Link, error) {
+	res, err := c.client.R().
+		SetContext(ctx).
+		Head(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch link: %w", err)
+	}
+
+	segments := strings.Split(res.Request.URL.Path, "/")
+	filename, _ := lo.Last(segments)
+	return &Link{
+		URL:         url,
+		DownloadURL: url,
+		Filename:    filename,
+		Size:        res.ContentLength,
+	}, nil
+}
+
+func IsUnrestrictedLink(u string) bool {
+	parsed, err := url.Parse(u)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(parsed.Host, "debrid.it")
 }
