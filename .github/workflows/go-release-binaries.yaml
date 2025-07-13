@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -27,26 +27,32 @@ jobs:
           go-version: '1.24'
           check-latest: true
 
-      - name: Get version info
-        id: version
-        run: |
-          GIT_TAG=$(git describe --tags --exact-match 2>/dev/null || echo "dev")
-          GIT_COMMIT=$(git rev-parse --short HEAD)
-          echo "git_tag=${GIT_TAG}" >> $GITHUB_OUTPUT
-          echo "git_commit=${GIT_COMMIT}" >> $GITHUB_OUTPUT
-
       - name: Build binary
-        run: >-
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }}
-          go build -v 
-          -ldflags "-s -w -X main.gitTag=${{ steps.version.outputs.git_tag }} -X main.gitCommit=${{ steps.version.outputs.git_commit }}"
-          -o alldebrid-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }} .
+        run: |
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -v -ldflags "-s -w" -o alldebrid-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }} .
 
-      - name: Create/Update Draft Release
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alldebrid-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: alldebrid-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: binaries/
+          merge-multiple: true
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
-          draft: true
+          draft: false
           generate_release_notes: true
-          files: alldebrid-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.goos == 'windows' && '.exe' || '' }}
+          files: binaries/*
