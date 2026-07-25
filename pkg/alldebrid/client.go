@@ -122,7 +122,7 @@ func (c *Client) UploadTorrent(ctx context.Context, torrentPath string) (int, er
 				if _, err := file.Seek(0, 0); err != nil {
 					return nil, fmt.Errorf("failed to seek file: %w", err)
 				}
-				return file, nil
+				return io.NopCloser(file), nil
 			},
 		}).
 		Post("/magnet/upload/file")
@@ -131,7 +131,7 @@ func (c *Client) UploadTorrent(ctx context.Context, torrentPath string) (int, er
 	}
 
 	var result APIResponse[UploadResponse]
-	if err := res.UnmarshalJson(&res); err != nil {
+	if err := res.UnmarshalJson(&result); err != nil {
 		log.Ctx(ctx).Error().
 			Err(err).
 			Msg("Failed to parse torrent upload response")
